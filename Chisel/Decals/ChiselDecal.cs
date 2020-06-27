@@ -1,6 +1,7 @@
 using Chisel.Core;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using UnityEditor.Experimental.AssetImporters;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -18,6 +19,9 @@ namespace AeternumGames.Chisel.Decals
         [SerializeField] private Quaternion lastWorldRotation;
         [SerializeField] private Vector3 lastWorldScale;
 
+        public Vector2 uvTiling = new Vector2(1.0f, 1.0f);
+        public Vector2 uvOffset = new Vector2(0.0f, 0.0f);
+
         private void OnEnable()
         {
             meshFilter = GetComponent<MeshFilter>();
@@ -33,6 +37,14 @@ namespace AeternumGames.Chisel.Decals
         {
             // only rebuild the decal mesh if we were modified.
             if (!IsDirty()) return;
+            // update the flags we need to tell if we have to rebuild the decal mesh.
+            UpdateDirtyFlags();
+            // rebuild the decal mesh.
+            Rebuild();
+        }
+
+        public void Rebuild()
+        {
             // update the flags we need to tell if we have to rebuild the decal mesh.
             UpdateDirtyFlags();
 
@@ -82,8 +94,10 @@ namespace AeternumGames.Chisel.Decals
                     f = transform.TransformVector(f * 0.5f);
                     u = transform.TransformVector(u * 0.5f);
 
-                    float uscale = transform.InverseTransformVector(transform.right).x;
-                    float vscale = transform.InverseTransformVector(transform.up).y;
+                    float uscale = transform.InverseTransformVector(transform.right).x * uvTiling.x;
+                    float vscale = transform.InverseTransformVector(transform.up).y * uvTiling.y;
+                    float uoffset = 0.5f * uvTiling.x - uvOffset.x;
+                    float voffset = 0.5f * uvTiling.y + uvOffset.y;
 
                     Plane clipRL = new Plane(-r, transform.position + r);
                     Plane clipLR = new Plane(r, transform.position - r);
@@ -105,9 +119,9 @@ namespace AeternumGames.Chisel.Decals
                             // the distance of the vertices to the planes are used to calculate UV coordinates.
                             Plane hplane = new Plane(u, transform.position);
                             Plane vplane = new Plane(r, transform.position);
-                            Vector2 uv1 = new Vector2((vplane.GetDistanceToPoint(colliderVertex1) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex1) * vscale) + 0.5f);
-                            Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + 0.5f);
-                            Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + 0.5f);
+                            Vector2 uv1 = new Vector2((vplane.GetDistanceToPoint(colliderVertex1) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex1) * vscale) + voffset);
+                            Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + voffset);
+                            Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + voffset);
 
                             // undo our transformation so that the mesh looks correct in the scene.
                             colliderVertex1 = transform.InverseTransformPoint(colliderVertex1);
