@@ -27,6 +27,14 @@ namespace AeternumGames.Chisel.Decals
             // mark the game object as static.
             gameObject.isStatic = true;
 
+            // initialize the mesh renderer.
+            var meshRenderer = GetComponent<MeshRenderer>();
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            // ensure a material is assigned to the mesh renderer.
+            if (meshRenderer.sharedMaterial == null)
+                meshRenderer.sharedMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Packages/com.aeternumgames.chisel.decals/Chisel/Decals/Materials/com.aeternumgames.chisel.decals.placeholder.mat");
+
             // initialize the mesh filter.
             meshFilter = GetComponent<MeshFilter>();
             meshFilter.hideFlags = HideFlags.NotEditable;
