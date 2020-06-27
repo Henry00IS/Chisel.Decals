@@ -1,0 +1,22 @@
+{
+  "description": "Decals for the Chisel Editor",
+  "displayName": "Chisel Decals",
+  "name": "com.aeternumgames.chisel.decals",
+  "keywords": [
+    "level design",
+    "world building",
+    "CSG",
+    "BSP",
+    "Boolean",
+	"Decal",
+	"Decals",
+	"Overlays"
+  ],
+  "unity": "2018.3",
+  "version": "1.0.1",
+  "dependencies": {
+    "com.unity.mathematics": "1.1.0",
+    "com.chisel.core": "",
+    "com.chisel.components": ""
+  }
+}
