@@ -13,36 +13,29 @@ namespace AeternumGames.Chisel.Decals
     public class ChiselDecal : MonoBehaviour
     {
         private MeshFilter meshFilter;
-        private MeshRenderer meshRenderer;
 
-        [SerializeField]
-        private int lastInstanceID;
+        [SerializeField] private Vector3 lastWorldPosition;
+        [SerializeField] private Quaternion lastWorldRotation;
+        [SerializeField] private Vector3 lastWorldScale;
 
         private void OnEnable()
         {
             meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
 
             // ensure a mesh is assigned to the mesh filter.
             if (meshFilter.sharedMesh == null)
             {
                 ResetDecalMesh();
             }
-            else
-            {
-                // ensure that if duplicated we have a unique mesh to work with.
-                if (lastInstanceID != GetInstanceID())
-                {
-                    ResetDecalMesh();
-                }
-            }
-
-            // remember the last instance id.
-            lastInstanceID = GetInstanceID();
         }
 
         private void Update()
         {
+            // only rebuild the decal mesh if we were modified.
+            if (!IsDirty()) return;
+            // update the flags we need to tell if we have to rebuild the decal mesh.
+            UpdateDirtyFlags();
+
             // find all mesh colliders that intersect with the decal projector box.
             List<MeshCollider> meshColliders = new List<MeshCollider>();
             FindMeshColliders(meshColliders);
@@ -89,6 +82,9 @@ namespace AeternumGames.Chisel.Decals
                     f = transform.TransformVector(f * 0.5f);
                     u = transform.TransformVector(u * 0.5f);
 
+                    float uscale = transform.InverseTransformVector(transform.right).x;
+                    float vscale = transform.InverseTransformVector(transform.up).y;
+
                     Plane clipRL = new Plane(-r, transform.position + r);
                     Plane clipLR = new Plane(r, transform.position - r);
                     Plane clipBBT = new Plane(-f, transform.position + f);
@@ -109,9 +105,9 @@ namespace AeternumGames.Chisel.Decals
                             // the distance of the vertices to the planes are used to calculate UV coordinates.
                             Plane hplane = new Plane(u, transform.position);
                             Plane vplane = new Plane(r, transform.position);
-                            Vector2 uv1 = new Vector2(vplane.GetDistanceToPoint(colliderVertex1) - 0.5f, hplane.GetDistanceToPoint(colliderVertex1) - 0.5f);
-                            Vector2 uv2 = new Vector2(vplane.GetDistanceToPoint(colliderVertex2) - 0.5f, hplane.GetDistanceToPoint(colliderVertex2) - 0.5f);
-                            Vector2 uv3 = new Vector2(vplane.GetDistanceToPoint(colliderVertex3) - 0.5f, hplane.GetDistanceToPoint(colliderVertex3) - 0.5f);
+                            Vector2 uv1 = new Vector2((vplane.GetDistanceToPoint(colliderVertex1) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex1) * vscale) + 0.5f);
+                            Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + 0.5f);
+                            Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + 0.5f, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + 0.5f);
 
                             // undo our transformation so that the mesh looks correct in the scene.
                             colliderVertex1 = transform.InverseTransformPoint(colliderVertex1);
@@ -119,10 +115,12 @@ namespace AeternumGames.Chisel.Decals
                             colliderVertex3 = transform.InverseTransformPoint(colliderVertex3);
 
                             // ADD
+                            // todo: calculate a z-offset using the sibling index letting you order decals in the hierarchy.
                             Plane plane = new Plane(colliderVertex1, colliderVertex2, colliderVertex3);
-                            colliderVertex1 += plane.normal * 0.002f;
-                            colliderVertex2 += plane.normal * 0.002f;
-                            colliderVertex3 += plane.normal * 0.002f;
+                            colliderVertex1 += plane.normal * 0.001f;
+                            colliderVertex2 += plane.normal * 0.001f;
+                            colliderVertex3 += plane.normal * 0.001f;
+
                             vertices.Add(colliderVertex1); triangles.Add(vertices.Count - 1); uvs.Add(uv1);
                             vertices.Add(colliderVertex2); triangles.Add(vertices.Count - 1); uvs.Add(uv2);
                             vertices.Add(colliderVertex3); triangles.Add(vertices.Count - 1); uvs.Add(uv3);
@@ -148,6 +146,19 @@ namespace AeternumGames.Chisel.Decals
             }
         }
 
+        private bool IsDirty()
+        {
+            return (transform.position != lastWorldPosition || transform.rotation != lastWorldRotation || transform.lossyScale != lastWorldScale);
+        }
+
+        private void UpdateDirtyFlags()
+        {
+            // remember the last world transformation.
+            lastWorldPosition = transform.position;
+            lastWorldRotation = transform.rotation;
+            lastWorldScale = transform.lossyScale;
+        }
+
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.green;
@@ -156,12 +167,6 @@ namespace AeternumGames.Chisel.Decals
             Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
             Gizmos.matrix = Matrix4x4.identity;
             Gizmos.color = Color.white;
-
-            Bounds projectorBounds = GetBounds();
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireCube(transform.position - projectorBounds.center, projectorBounds.size);
-
-            Gizmos.DrawWireMesh(meshFilter.sharedMesh);
         }
 
         /// <summary>
@@ -230,33 +235,6 @@ namespace AeternumGames.Chisel.Decals
                 projectorBounds.Encapsulate(-f - r - u);
             }
             return projectorBounds;
-        }
-
-        private void DrawPlane(Vector3 position, Vector3 normal)
-        {
-            Vector3 v3;
-
-            if (normal.normalized != Vector3.forward)
-                v3 = Vector3.Cross(normal, Vector3.forward).normalized * normal.magnitude;
-            else
-                v3 = Vector3.Cross(normal, Vector3.up).normalized * normal.magnitude; ;
-
-            var corner0 = position + v3;
-            var corner2 = position - v3;
-            var q = Quaternion.AngleAxis(90.0f, normal);
-            v3 = q * v3;
-            var corner1 = position + v3;
-            var corner3 = position - v3;
-
-            Gizmos.color = Color.green;
-            Gizmos.DrawLine(corner0, corner2);
-            Gizmos.DrawLine(corner1, corner3);
-            Gizmos.DrawLine(corner0, corner1);
-            Gizmos.DrawLine(corner1, corner2);
-            Gizmos.DrawLine(corner2, corner3);
-            Gizmos.DrawLine(corner3, corner0);
-            Gizmos.color = Color.red;
-            Gizmos.DrawRay(position, normal);
         }
 
         public static List<Vector3> ClipPolygon(List<Vector3> poly_1, List<Plane> clippingPlanes)
