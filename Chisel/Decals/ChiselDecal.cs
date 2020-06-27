@@ -15,6 +15,7 @@ namespace AeternumGames.Chisel.Decals
     {
         private MeshFilter meshFilter;
 
+        [SerializeField] private int lastInstanceID;
         [SerializeField] private Vector3 lastWorldPosition;
         [SerializeField] private Quaternion lastWorldRotation;
         [SerializeField] private Vector3 lastWorldScale;
@@ -25,12 +26,20 @@ namespace AeternumGames.Chisel.Decals
         private void OnEnable()
         {
             meshFilter = GetComponent<MeshFilter>();
+            meshFilter.hideFlags = HideFlags.NotEditable;
 
             // ensure a mesh is assigned to the mesh filter.
             if (meshFilter.sharedMesh == null)
             {
                 ResetDecalMesh();
             }
+            // detect duplication as the last instance id will not be 0.
+            else if (lastInstanceID != 0)
+            {
+                ResetDecalMesh();
+            }
+            // store our instance id to detect duplication.
+            lastInstanceID = GetInstanceID();
         }
 
         private void Update()

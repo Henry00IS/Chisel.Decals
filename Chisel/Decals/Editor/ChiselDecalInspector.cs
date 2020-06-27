@@ -21,13 +21,11 @@ namespace AeternumGames.Chisel.Decals
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+
             EditorGUILayout.PropertyField(uvTiling);
             EditorGUILayout.PropertyField(uvOffset);
 
-            bool dirty = false;
-            dirty = serializedObject.hasModifiedProperties;
-            serializedObject.ApplyModifiedProperties();
-            if (dirty)
+            if (serializedObject.ApplyModifiedProperties())
             {
                 foreach (var target in serializedObject.targetObjects)
                 {
