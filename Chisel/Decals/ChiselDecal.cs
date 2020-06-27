@@ -8,29 +8,39 @@ namespace AeternumGames.Chisel.Decals
     [RequireComponent(typeof(MeshRenderer))]
     public class ChiselDecal : MonoBehaviour
     {
+#if UNITY_EDITOR
+
         private MeshFilter meshFilter;
 
         [SerializeField] private Vector3 lastWorldPosition;
         [SerializeField] private Quaternion lastWorldRotation;
         [SerializeField] private Vector3 lastWorldScale;
 
-        public Vector2 uvTiling = new Vector2(1.0f, 1.0f);
-        public Vector2 uvOffset = new Vector2(0.0f, 0.0f);
+        [SerializeField] private Vector2 uvTiling = new Vector2(1.0f, 1.0f);
+        [SerializeField] private Vector2 uvOffset = new Vector2(0.0f, 0.0f);
 
-        private void Awake()
+        private void OnEnable()
         {
+            // no logic during play.
+            if (Application.isPlaying) return;
+
+            // mark the game object as static.
+            gameObject.isStatic = true;
+
+            // initialize the mesh filter.
             meshFilter = GetComponent<MeshFilter>();
             meshFilter.hideFlags = HideFlags.NotEditable;
 
             // ensure a mesh is assigned to the mesh filter.
             if (meshFilter.sharedMesh == null)
-            {
                 ResetDecalMesh();
-            }
         }
 
         private void Update()
         {
+            // no logic during play.
+            if (Application.isPlaying) return;
+
             // only rebuild the decal mesh if we were modified.
             if (!IsDirty()) return;
             // update the flags we need to tell if we have to rebuild the decal mesh.
@@ -39,8 +49,11 @@ namespace AeternumGames.Chisel.Decals
             Rebuild();
         }
 
-        public void Rebuild()
+        internal void Rebuild()
         {
+            // no logic during play.
+            if (Application.isPlaying) return;
+
             // always create a new mesh as duplication will copy our shared mesh.
             // would have preferred mesh.Clear() but there's just no clean way to do it atm.
             Mesh mesh = ResetDecalMesh();
@@ -260,7 +273,7 @@ namespace AeternumGames.Chisel.Decals
             return projectorBounds;
         }
 
-        public static List<Vector3> ClipPolygon(List<Vector3> poly_1, List<Plane> clippingPlanes)
+        private static List<Vector3> ClipPolygon(List<Vector3> poly_1, List<Plane> clippingPlanes)
         {
             //Clone the vertices because we will remove vertices from this list
             List<Vector3> vertices = new List<Vector3>(poly_1);
@@ -327,7 +340,7 @@ namespace AeternumGames.Chisel.Decals
         }
 
         //Get the coordinate if we know a ray-plane is intersecting
-        public static Vector3 GetRayPlaneIntersectionCoordinate(Vector3 planePos, Vector3 planeNormal, Vector3 rayStart, Vector3 rayDir)
+        private static Vector3 GetRayPlaneIntersectionCoordinate(Vector3 planePos, Vector3 planeNormal, Vector3 rayStart, Vector3 rayDir)
         {
             float denominator = Vector3.Dot(-planeNormal, rayDir);
 
@@ -340,14 +353,14 @@ namespace AeternumGames.Chisel.Decals
             return intersectionPoint;
         }
 
-        public static int ClampListIndex(int index, int listSize)
+        private static int ClampListIndex(int index, int listSize)
         {
             index = ((index % listSize) + listSize) % listSize;
 
             return index;
         }
 
-        public static float DistanceFromPointToPlane(Vector3 planeNormal, Vector3 planePos, Vector3 pointPos)
+        private static float DistanceFromPointToPlane(Vector3 planeNormal, Vector3 planePos, Vector3 pointPos)
         {
             //Positive distance denotes that the point p is on the front side of the plane
             //Negative means it's on the back side
@@ -356,9 +369,6 @@ namespace AeternumGames.Chisel.Decals
             return distance;
         }
 
-        private static Vector3 MultiplyVector3(Vector3 a, Vector3 b)
-        {
-            return new Vector3(a.x * b.x, a.y * b.y, a.z * b.z);
-        }
+#endif
     }
 }

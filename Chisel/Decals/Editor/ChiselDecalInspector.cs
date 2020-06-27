@@ -1,3 +1,5 @@
+#if UNITY_EDITOR
+
 using UnityEngine;
 using UnityEditor;
 
@@ -46,3 +48,5 @@ namespace AeternumGames.Chisel.Decals
         }
     }
 }
+
+#endif
