@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
@@ -25,13 +23,25 @@ namespace AeternumGames.Chisel.Decals
             EditorGUILayout.PropertyField(uvTiling);
             EditorGUILayout.PropertyField(uvOffset);
 
+            // force rebuild the decal when modified.
             if (serializedObject.ApplyModifiedProperties())
             {
-                foreach (var target in serializedObject.targetObjects)
-                {
-                    var decal = (ChiselDecal)target;
-                    decal.Rebuild();
-                }
+                RebuildTargetDecals();
+            }
+
+            // force rebuild the decal manually - always on undo or redo.
+            if (GUILayout.Button("Force Rebuild") || (Event.current.commandName == "UndoRedoPerformed"))
+            {
+                RebuildTargetDecals();
+            }
+        }
+
+        private void RebuildTargetDecals()
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                decal.Rebuild();
             }
         }
     }

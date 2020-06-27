@@ -1,10 +1,5 @@
-using Chisel.Core;
-using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using UnityEditor.Experimental.AssetImporters;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace AeternumGames.Chisel.Decals
 {
@@ -15,7 +10,6 @@ namespace AeternumGames.Chisel.Decals
     {
         private MeshFilter meshFilter;
 
-        [SerializeField] private int lastInstanceID;
         [SerializeField] private Vector3 lastWorldPosition;
         [SerializeField] private Quaternion lastWorldRotation;
         [SerializeField] private Vector3 lastWorldScale;
@@ -23,7 +17,7 @@ namespace AeternumGames.Chisel.Decals
         public Vector2 uvTiling = new Vector2(1.0f, 1.0f);
         public Vector2 uvOffset = new Vector2(0.0f, 0.0f);
 
-        private void OnEnable()
+        private void Awake()
         {
             meshFilter = GetComponent<MeshFilter>();
             meshFilter.hideFlags = HideFlags.NotEditable;
@@ -33,13 +27,6 @@ namespace AeternumGames.Chisel.Decals
             {
                 ResetDecalMesh();
             }
-            // detect duplication as the last instance id will not be 0.
-            else if (lastInstanceID != 0)
-            {
-                ResetDecalMesh();
-            }
-            // store our instance id to detect duplication.
-            lastInstanceID = GetInstanceID();
         }
 
         private void Update()
@@ -54,6 +41,10 @@ namespace AeternumGames.Chisel.Decals
 
         public void Rebuild()
         {
+            // always create a new mesh as duplication will copy our shared mesh.
+            // would have preferred mesh.Clear() but there's just no clean way to do it atm.
+            Mesh mesh = ResetDecalMesh();
+
             // update the flags we need to tell if we have to rebuild the decal mesh.
             UpdateDirtyFlags();
 
@@ -61,7 +52,6 @@ namespace AeternumGames.Chisel.Decals
             List<MeshCollider> meshColliders = new List<MeshCollider>();
             FindMeshColliders(meshColliders);
 
-            Mesh mesh = meshFilter.sharedMesh;
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
             List<Vector2> uvs = new List<Vector2>();
@@ -95,13 +85,9 @@ namespace AeternumGames.Chisel.Decals
                     triangleBounds.Encapsulate(colliderVertex3);
                     if (!projectorBounds.Intersects(triangleBounds)) continue;
 
-                    Vector3 r = Vector3.right;
-                    Vector3 f = Vector3.forward;
-                    Vector3 u = Vector3.up;
-
-                    r = transform.TransformVector(r * 0.5f);
-                    f = transform.TransformVector(f * 0.5f);
-                    u = transform.TransformVector(u * 0.5f);
+                    Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
+                    Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
+                    Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
 
                     float uscale = transform.InverseTransformVector(transform.right).x * uvTiling.x;
                     float vscale = transform.InverseTransformVector(transform.up).y * uvTiling.y;
@@ -155,17 +141,12 @@ namespace AeternumGames.Chisel.Decals
 
             if (vertices.Count > 0)
             {
-                mesh.Clear();
                 mesh.SetVertices(vertices);
                 mesh.SetTriangles(triangles, 0);
                 mesh.SetUVs(0, uvs);
                 mesh.RecalculateNormals();
                 mesh.RecalculateTangents();
                 mesh.RecalculateBounds();
-            }
-            else
-            {
-                mesh.Clear();
             }
         }
 
@@ -185,22 +166,45 @@ namespace AeternumGames.Chisel.Decals
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = Color.green;
-            Gizmos.DrawRay(transform.position, transform.forward);
             Gizmos.matrix = transform.localToWorldMatrix;
             Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
             Gizmos.matrix = Matrix4x4.identity;
             Gizmos.color = Color.white;
         }
 
+        private void OnDrawGizmos()
+        {
+            Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
+            Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
+            Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
+
+            // draw arrow pointing toward the projection.
+            Vector3 point = transform.position - f;
+            f.Normalize();
+
+            Gizmos.color = Color.blue;
+            Gizmos.DrawLine(point, point - f);
+            f = f.normalized * 0.25f;
+            r = r.normalized * 0.25f;
+            u = u.normalized * 0.25f;
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(point, point + u);
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(point, point - f - r);
+            Gizmos.DrawLine(point, point - f + r);
+
+            Gizmos.color = Color.white;
+        }
+
         /// <summary>
         /// Resets the decal mesh and assigns it to the mesh filter.
         /// </summary>
-        private void ResetDecalMesh()
+        private Mesh ResetDecalMesh()
         {
             Mesh decalMesh = new Mesh();
             decalMesh.name = "Chisel Decal";
-            decalMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             meshFilter.sharedMesh = decalMesh;
+            return decalMesh;
         }
 
         /// <summary>
@@ -240,13 +244,9 @@ namespace AeternumGames.Chisel.Decals
         {
             Bounds projectorBounds = new Bounds();
             {
-                Vector3 r = Vector3.right;
-                Vector3 f = Vector3.forward;
-                Vector3 u = Vector3.up;
-
-                r = transform.TransformVector(r * 0.5f);
-                f = transform.TransformVector(f * 0.5f);
-                u = transform.TransformVector(u * 0.5f);
+                Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
+                Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
+                Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
 
                 projectorBounds.Encapsulate(f + r + u);
                 projectorBounds.Encapsulate(f - r + u);
