@@ -34,12 +34,22 @@ namespace AeternumGames.Chisel.Decals
             Camera camera = SceneView.lastActiveSceneView?.camera;
             if (camera != null)
             {
-                go.transform.position = camera.transform.position + (camera.transform.forward.normalized * 3.0f);
-                go.transform.rotation = Quaternion.LookRotation(NearestWorldAxis(camera.transform.forward));
+                // attempt to find collision in front of the camera.
+                if (Physics.Raycast(new Ray(camera.transform.position, camera.transform.forward), out RaycastHit hit, 50.0f))
+                {
+                    go.transform.position = hit.point;
+                    go.transform.rotation = Quaternion.LookRotation(-hit.normal);
+                }
+                else
+                {
+                    go.transform.position = camera.transform.position + (camera.transform.forward.normalized * 3.0f);
+                    go.transform.rotation = Quaternion.LookRotation(NearestWorldAxis(camera.transform.forward));
+                }
             }
 
             // select the game object in the hierarchy.
             Selection.activeGameObject = go;
+            EditorGUIUtility.PingObject(go);
         }
 
         private static Vector3 NearestWorldAxis(Vector3 v)
