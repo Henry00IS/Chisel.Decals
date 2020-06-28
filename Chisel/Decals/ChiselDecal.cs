@@ -10,6 +10,9 @@ namespace AeternumGames.Chisel.Decals
     {
 #if UNITY_EDITOR
 
+        /// <summary>Shared dictionary of octrees of triangle indices for every mesh we are computing with.</summary>
+        internal static readonly Dictionary<Mesh, BoundsOctree<BoundsOctreeTriangle>> meshTriangleOctrees = new Dictionary<Mesh, BoundsOctree<BoundsOctreeTriangle>>();
+
         private MeshFilter meshFilter;
         private int lastInstanceID;
 
@@ -115,32 +118,59 @@ namespace AeternumGames.Chisel.Decals
             {
                 var meshCollider = meshColliders[mc];
                 Mesh colliderMesh = meshCollider.sharedMesh;
-                Vector3[] colliderVertices = colliderMesh.vertices;
-                int[] colliderTriangles = colliderMesh.GetTriangles(0);
 
-                for (int i = 0; i < colliderTriangles.Length; i += 3)
+                // make sure an octree of this mesh exists.
+                if (!meshTriangleOctrees.ContainsKey(colliderMesh))
                 {
-                    // fetch a triangle from the collider.
-                    Vector3 colliderVertex1 = colliderVertices[colliderTriangles[i]];
-                    Vector3 colliderVertex2 = colliderVertices[colliderTriangles[i + 1]];
-                    Vector3 colliderVertex3 = colliderVertices[colliderTriangles[i + 2]];
+                    meshTriangleOctrees.Add(colliderMesh, new BoundsOctree<BoundsOctreeTriangle>(colliderMesh.bounds.max.magnitude, meshCollider.transform.position, 1.0f, 1.0f));
 
-                    // apply any modification from their transform.
-                    colliderVertex1 = meshCollider.transform.TransformPoint(colliderVertex1);
-                    colliderVertex2 = meshCollider.transform.TransformPoint(colliderVertex2);
-                    colliderVertex3 = meshCollider.transform.TransformPoint(colliderVertex3);
+                    // get the collider vertices and triangles.
+                    Vector3[] colliderVertices = colliderMesh.vertices;
+                    int[] colliderTriangles = colliderMesh.GetTriangles(0);
 
-                    // now the mesh vertices are in world space 1:1 to how they appear in the scene.
+                    // build the octree.
+                    for (int i = 0; i < colliderTriangles.Length; i += 3)
+                    {
+                        // fetch a triangle from the collider.
+                        Vector3 colliderVertex1 = colliderVertices[colliderTriangles[i]];
+                        Vector3 colliderVertex2 = colliderVertices[colliderTriangles[i + 1]];
+                        Vector3 colliderVertex3 = colliderVertices[colliderTriangles[i + 2]];
+
+                        // apply any modification from their transform.
+                        colliderVertex1 = meshCollider.transform.TransformPoint(colliderVertex1);
+                        colliderVertex2 = meshCollider.transform.TransformPoint(colliderVertex2);
+                        colliderVertex3 = meshCollider.transform.TransformPoint(colliderVertex3);
+
+                        // now the mesh vertices are in world space 1:1 to how they appear in the scene.
+
+                        // calculate the triangle bounds.
+                        Bounds triangleBounds = new Bounds(colliderVertex1, Vector3.zero);
+                        triangleBounds.Encapsulate(colliderVertex2);
+                        triangleBounds.Encapsulate(colliderVertex3);
+
+                        // add the triangle to the octree.
+                        meshTriangleOctrees[colliderMesh].Add(new BoundsOctreeTriangle() { triangleVertex1 = colliderVertex1, triangleVertex2 = colliderVertex2, triangleVertex3 = colliderVertex3 }, triangleBounds);
+                    }
+                }
+
+                // find all triangles inside of the projector bounds using the octree.
+                List<BoundsOctreeTriangle> trianglesInsideProjector = new List<BoundsOctreeTriangle>();
+                meshTriangleOctrees[colliderMesh].GetColliding(trianglesInsideProjector, projectorBounds);
+
+                // iterate over all triangles inside of the projector bounds:
+                for (int i = 0; i < trianglesInsideProjector.Count; i++)
+                {
+                    // fetch a triangle from the octree.
+                    BoundsOctreeTriangle triangle = trianglesInsideProjector[i];
+                    Vector3 colliderVertex1 = triangle.triangleVertex1;
+                    Vector3 colliderVertex2 = triangle.triangleVertex2;
+                    Vector3 colliderVertex3 = triangle.triangleVertex3;
+
+                    // the mesh vertices are in world space 1:1 to how they appear in the scene.
 
                     // if the triangle exceeds the maximum angle we discard it.
                     if (Vector3.Dot(transform.forward, GetNormal(colliderVertex1, colliderVertex2, colliderVertex3)) >= maxAngleCos)
                         continue;
-
-                    // if the triangle bounds are completely outside of the projector bounds we discard it.
-                    Bounds triangleBounds = new Bounds(colliderVertex1, Vector3.zero);
-                    triangleBounds.Encapsulate(colliderVertex2);
-                    triangleBounds.Encapsulate(colliderVertex3);
-                    if (!projectorBounds.Intersects(triangleBounds)) continue;
 
                     // optimization?: if the triangle is wholly inside of the projector we don't have to clip it.
 
