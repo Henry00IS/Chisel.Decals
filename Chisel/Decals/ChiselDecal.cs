@@ -73,8 +73,7 @@ namespace AeternumGames.Chisel.Decals
             UpdateDirtyFlags();
 
             // find all mesh colliders that intersect with the decal projector box.
-            List<MeshCollider> meshColliders = new List<MeshCollider>();
-            FindMeshColliders(meshColliders);
+            List<MeshCollider> meshColliders = FindMeshColliders();
 
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
@@ -94,13 +93,14 @@ namespace AeternumGames.Chisel.Decals
             float uoffset = 0.5f * uvTiling.x - uvOffset.x;
             float voffset = 0.5f * uvTiling.y + uvOffset.y;
 
-            Plane clipRL = new Plane(-r, transform.position + r);
-            Plane clipLR = new Plane(r, transform.position - r);
-            Plane clipBBT = new Plane(-f, transform.position + f);
-            Plane clipFBT = new Plane(f, transform.position - f);
-            Plane clipTBF = new Plane(-u, transform.position + u + f);
-            Plane clipBBF = new Plane(u, transform.position - u + f);
-            List<Plane> clipPlanes = new List<Plane>() { clipRL, clipLR, clipBBT, clipFBT, clipTBF, clipBBF };
+            Plane[] clipPlanes = new Plane[] {
+                new Plane(-r, transform.position + r),
+                new Plane(r, transform.position - r),
+                new Plane(-f, transform.position + f),
+                new Plane(f, transform.position - f),
+                new Plane(-u, transform.position + u + f),
+                new Plane(u, transform.position - u + f)
+            };
 
             // create a horizontal and vertical plane through the projector box.
             // the distance of the vertices to the planes are used to calculate UV coordinates.
@@ -109,8 +109,9 @@ namespace AeternumGames.Chisel.Decals
 
             float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
 
-            foreach (var meshCollider in meshColliders)
+            for (int mc = 0; mc < meshColliders.Count; mc++)
             {
+                var meshCollider = meshColliders[mc];
                 Mesh colliderMesh = meshCollider.sharedMesh;
                 Vector3[] colliderVertices = colliderMesh.vertices;
                 int[] colliderTriangles = colliderMesh.GetTriangles(0);
@@ -139,13 +140,16 @@ namespace AeternumGames.Chisel.Decals
                     triangleBounds.Encapsulate(colliderVertex3);
                     if (!projectorBounds.Intersects(triangleBounds)) continue;
 
-                    // clipy the triangle to fit inside of the projector box.
+                    // clip the triangle to fit inside of the projector box.
                     List<Vector3> poly = ClipPolygon(new List<Vector3>() { colliderVertex1, colliderVertex2, colliderVertex3 }, clipPlanes);
 
                     if (poly.Count >= 3)
                     {
-                        foreach (var triangle in Triangulate(poly.ToArray()))
+                        var triangulated = Triangulate(poly);
+                        for (int tr = 0; tr < triangulated.Length; tr++)
                         {
+                            var triangle = triangulated[tr];
+
                             colliderVertex1 = triangle[0];
                             colliderVertex2 = triangle[1];
                             colliderVertex3 = triangle[2];
@@ -163,10 +167,10 @@ namespace AeternumGames.Chisel.Decals
 
                             // ADD
                             // todo: calculate a z-offset using the sibling index letting you order decals in the hierarchy.
-                            Plane plane = new Plane(colliderVertex1, colliderVertex2, colliderVertex3);
-                            colliderVertex1 += plane.normal * 0.001f;
-                            colliderVertex2 += plane.normal * 0.001f;
-                            colliderVertex3 += plane.normal * 0.001f;
+                            Vector3 normal = GetNormal(colliderVertex1, colliderVertex2, colliderVertex3);
+                            colliderVertex1 += normal * 0.001f;
+                            colliderVertex2 += normal * 0.001f;
+                            colliderVertex3 += normal * 0.001f;
 
                             vertices.Add(colliderVertex1); triangles.Add(vertices.Count - 1); uvs.Add(uv1);
                             vertices.Add(colliderVertex2); triangles.Add(vertices.Count - 1); uvs.Add(uv2);
@@ -184,7 +188,6 @@ namespace AeternumGames.Chisel.Decals
                 mesh.SetUVs(0, uvs);
                 mesh.RecalculateNormals();
                 mesh.RecalculateTangents();
-                mesh.RecalculateBounds();
             }
         }
 
@@ -249,30 +252,32 @@ namespace AeternumGames.Chisel.Decals
         /// Finds all mesh colliders that intersect with the decal projector box.
         /// </summary>
         /// <param name="results">The list that will contain all of the results.</param>
-        private void FindMeshColliders(List<MeshCollider> results)
+        private List<MeshCollider> FindMeshColliders()
         {
             Collider[] colliders = Physics.OverlapBox(transform.position, transform.lossyScale * 0.5f, Quaternion.LookRotation(transform.forward));
+            var results = new List<MeshCollider>(colliders.Length);
             for (int i = 0; i < colliders.Length; i++)
             {
                 Collider collider = colliders[i];
                 if (collider.GetType() == typeof(MeshCollider))
                     results.Add((MeshCollider)collider);
             }
+            return results;
         }
 
-        private static List<Vector3[]> Triangulate(Vector3[] polygon)
+        private static Vector3[][] Triangulate(List<Vector3> polygon)
         {
-            int triangleCount = polygon.Length - 2;
-            List<Vector3[]> triangles = new List<Vector3[]>(triangleCount);
+            int triangleCount = polygon.Count - 2;
+            var triangles = new Vector3[triangleCount][];
 
             // Calculate triangulation
             for (int j = 0; j < triangleCount; j++)
             {
-                triangles.Add(new Vector3[] {
+                triangles[j] = new Vector3[] {
                     polygon[0],
                     polygon[j+1],
                     polygon[j+2]
-                });
+                };
             }
 
             return triangles;
@@ -280,36 +285,33 @@ namespace AeternumGames.Chisel.Decals
 
         private Bounds GetBounds()
         {
-            Bounds projectorBounds = new Bounds();
-            {
-                Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
-                Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
-                Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
+            Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
+            Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
+            Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
 
-                projectorBounds.Encapsulate(f + r + u);
-                projectorBounds.Encapsulate(f - r + u);
-                projectorBounds.Encapsulate(f + r - u);
-                projectorBounds.Encapsulate(f - r - u);
-                projectorBounds.Encapsulate(-f + r + u);
-                projectorBounds.Encapsulate(-f - r + u);
-                projectorBounds.Encapsulate(-f + r - u);
-                projectorBounds.Encapsulate(-f - r - u);
-            }
+            Bounds projectorBounds = new Bounds();
+            projectorBounds.Encapsulate(f + r + u);
+            projectorBounds.Encapsulate(f - r + u);
+            projectorBounds.Encapsulate(f + r - u);
+            projectorBounds.Encapsulate(f - r - u);
+            projectorBounds.Encapsulate(-f + r + u);
+            projectorBounds.Encapsulate(-f - r + u);
+            projectorBounds.Encapsulate(-f + r - u);
+            projectorBounds.Encapsulate(-f - r - u);
             return projectorBounds;
         }
 
-        private static List<Vector3> ClipPolygon(List<Vector3> poly_1, List<Plane> clippingPlanes)
+        // warning: input vertices will be modified!
+        private static List<Vector3> ClipPolygon(List<Vector3> vertices, Plane[] clippingPlanes)
         {
-            //Clone the vertices because we will remove vertices from this list
-            List<Vector3> vertices = new List<Vector3>(poly_1);
-
             //Save the new vertices temporarily in this list before transfering them to vertices
             List<Vector3> vertices_tmp = new List<Vector3>();
 
             //Clip the polygon
-            for (int i = 0; i < clippingPlanes.Count; i++)
+            for (int i = 0; i < clippingPlanes.Length; i++)
             {
                 Plane plane = clippingPlanes[i];
+                Vector3 planePosition = plane.ClosestPointOnPlane(Vector3.zero);
 
                 for (int j = 0; j < vertices.Count; j++)
                 {
@@ -321,8 +323,8 @@ namespace AeternumGames.Chisel.Decals
                     //Calculate the distance to the plane from each vertex
                     //This is how we will know if they are inside or outside
                     //If they are inside, the distance is positive, which is why the planes normals have to be oriented to the inside
-                    float dist_to_v1 = DistanceFromPointToPlane(plane.normal, plane.ClosestPointOnPlane(Vector3.zero), v1);
-                    float dist_to_v2 = DistanceFromPointToPlane(plane.normal, plane.ClosestPointOnPlane(Vector3.zero), v2);
+                    float dist_to_v1 = plane.GetDistanceToPoint(v1);
+                    float dist_to_v2 = plane.GetDistanceToPoint(v2);
 
                     //Case 1. Both are outside (= to the right), do nothing
 
@@ -336,7 +338,7 @@ namespace AeternumGames.Chisel.Decals
                     {
                         Vector3 rayDir = (v2 - v1).normalized;
 
-                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(plane.ClosestPointOnPlane(Vector3.zero), plane.normal, v1, rayDir);
+                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
 
                         vertices_tmp.Add(intersectionPoint);
 
@@ -347,7 +349,7 @@ namespace AeternumGames.Chisel.Decals
                     {
                         Vector3 rayDir = (v2 - v1).normalized;
 
-                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(plane.ClosestPointOnPlane(Vector3.zero), plane.normal, v1, rayDir);
+                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
 
                         vertices_tmp.Add(intersectionPoint);
                     }
@@ -383,15 +385,6 @@ namespace AeternumGames.Chisel.Decals
             index = ((index % listSize) + listSize) % listSize;
 
             return index;
-        }
-
-        private static float DistanceFromPointToPlane(Vector3 planeNormal, Vector3 planePos, Vector3 pointPos)
-        {
-            //Positive distance denotes that the point p is on the front side of the plane
-            //Negative means it's on the back side
-            float distance = Vector3.Dot(planeNormal, pointPos - planePos);
-
-            return distance;
         }
 
         // Get the normal to a triangle from the three corner points, a, b and c.
