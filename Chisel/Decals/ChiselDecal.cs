@@ -77,8 +77,31 @@ namespace AeternumGames.Chisel.Decals
             List<int> triangles = new List<int>();
             List<Vector2> uvs = new List<Vector2>();
 
+            // precalculate values that never change from this point on.
             Bounds projectorBounds = GetBounds();
             projectorBounds.center = transform.position - projectorBounds.center;
+
+            Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
+            Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
+            Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
+
+            float uscale = transform.InverseTransformVector(transform.right).x * uvTiling.x;
+            float vscale = transform.InverseTransformVector(transform.up).y * uvTiling.y;
+            float uoffset = 0.5f * uvTiling.x - uvOffset.x;
+            float voffset = 0.5f * uvTiling.y + uvOffset.y;
+
+            Plane clipRL = new Plane(-r, transform.position + r);
+            Plane clipLR = new Plane(r, transform.position - r);
+            Plane clipBBT = new Plane(-f, transform.position + f);
+            Plane clipFBT = new Plane(f, transform.position - f);
+            Plane clipTBF = new Plane(-u, transform.position + u + f);
+            Plane clipBBF = new Plane(u, transform.position - u + f);
+            List<Plane> clipPlanes = new List<Plane>() { clipRL, clipLR, clipBBT, clipFBT, clipTBF, clipBBF };
+
+            // create a horizontal and vertical plane through the projector box.
+            // the distance of the vertices to the planes are used to calculate UV coordinates.
+            Plane hplane = new Plane(u, transform.position);
+            Plane vplane = new Plane(r, transform.position);
 
             foreach (var meshCollider in meshColliders)
             {
@@ -106,22 +129,8 @@ namespace AeternumGames.Chisel.Decals
                     triangleBounds.Encapsulate(colliderVertex3);
                     if (!projectorBounds.Intersects(triangleBounds)) continue;
 
-                    Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
-                    Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
-                    Vector3 u = transform.TransformVector(Vector3.up * 0.5f);
-
-                    float uscale = transform.InverseTransformVector(transform.right).x * uvTiling.x;
-                    float vscale = transform.InverseTransformVector(transform.up).y * uvTiling.y;
-                    float uoffset = 0.5f * uvTiling.x - uvOffset.x;
-                    float voffset = 0.5f * uvTiling.y + uvOffset.y;
-
-                    Plane clipRL = new Plane(-r, transform.position + r);
-                    Plane clipLR = new Plane(r, transform.position - r);
-                    Plane clipBBT = new Plane(-f, transform.position + f);
-                    Plane clipFBT = new Plane(f, transform.position - f);
-                    Plane clipTBF = new Plane(-u, transform.position + u + f);
-                    Plane clipBBF = new Plane(u, transform.position - u + f);
-                    List<Vector3> poly = ClipPolygon(new List<Vector3>() { colliderVertex1, colliderVertex2, colliderVertex3 }, new List<Plane>() { clipRL, clipLR, clipBBT, clipFBT, clipTBF, clipBBF });
+                    // clipy the triangle to fit inside of the projector box.
+                    List<Vector3> poly = ClipPolygon(new List<Vector3>() { colliderVertex1, colliderVertex2, colliderVertex3 }, clipPlanes);
 
                     if (poly.Count >= 3)
                     {
@@ -131,10 +140,8 @@ namespace AeternumGames.Chisel.Decals
                             colliderVertex2 = triangle[1];
                             colliderVertex3 = triangle[2];
 
-                            // create a horizontal and vertical plane through the projector box.
+                            // use the horizontal and vertical plane through the projector box.
                             // the distance of the vertices to the planes are used to calculate UV coordinates.
-                            Plane hplane = new Plane(u, transform.position);
-                            Plane vplane = new Plane(r, transform.position);
                             Vector2 uv1 = new Vector2((vplane.GetDistanceToPoint(colliderVertex1) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex1) * vscale) + voffset);
                             Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + voffset);
                             Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + voffset);
