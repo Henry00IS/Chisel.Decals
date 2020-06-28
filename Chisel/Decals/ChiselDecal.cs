@@ -74,10 +74,12 @@ namespace AeternumGames.Chisel.Decals
 
             // find all mesh colliders that intersect with the decal projector box.
             List<MeshCollider> meshColliders = FindMeshColliders();
+            int meshCollidersCount = meshColliders.Count;
+            if (meshCollidersCount == 0) return; // early out.
 
-            List<Vector3> vertices = new List<Vector3>();
-            List<int> triangles = new List<int>();
-            List<Vector2> uvs = new List<Vector2>();
+            List<Vector3> vertices = new List<Vector3>(6 * meshCollidersCount);
+            List<int> triangles = new List<int>(6 * meshCollidersCount);
+            List<Vector2> uvs = new List<Vector2>(6 * meshCollidersCount);
 
             // precalculate values that never change from this point on.
 
@@ -109,7 +111,7 @@ namespace AeternumGames.Chisel.Decals
 
             float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
 
-            for (int mc = 0; mc < meshColliders.Count; mc++)
+            for (int mc = 0; mc < meshCollidersCount; mc++)
             {
                 var meshCollider = meshColliders[mc];
                 Mesh colliderMesh = meshCollider.sharedMesh;
@@ -131,7 +133,7 @@ namespace AeternumGames.Chisel.Decals
                     // now the mesh vertices are in world space 1:1 to how they appear in the scene.
 
                     // if the triangle exceeds the maximum angle we discard it.
-                    if (Vector3.Dot(transform.forward.normalized, GetNormal(colliderVertex1, colliderVertex2, colliderVertex3)) >= maxAngleCos)
+                    if (Vector3.Dot(transform.forward, GetNormal(colliderVertex1, colliderVertex2, colliderVertex3)) >= maxAngleCos)
                         continue;
 
                     // if the triangle bounds are completely outside of the projector bounds we discard it.
@@ -140,19 +142,25 @@ namespace AeternumGames.Chisel.Decals
                     triangleBounds.Encapsulate(colliderVertex3);
                     if (!projectorBounds.Intersects(triangleBounds)) continue;
 
+                    // optimization?: if the triangle is wholly inside of the projector we don't have to clip it.
+
                     // clip the triangle to fit inside of the projector box.
                     List<Vector3> poly = ClipPolygon(new List<Vector3>() { colliderVertex1, colliderVertex2, colliderVertex3 }, clipPlanes);
 
                     if (poly.Count >= 3)
                     {
-                        var triangulated = Triangulate(poly);
-                        for (int tr = 0; tr < triangulated.Length; tr++)
-                        {
-                            var triangle = triangulated[tr];
+                        Vector3[] triangulated;
+                        // only triangulate if required:
+                        if (poly.Count > 3)
+                            triangulated = Triangulate(poly);
+                        else
+                            triangulated = new Vector3[] { poly[0], poly[1], poly[2] };
 
-                            colliderVertex1 = triangle[0];
-                            colliderVertex2 = triangle[1];
-                            colliderVertex3 = triangle[2];
+                        for (int tr = 0; tr < triangulated.Length; tr += 3)
+                        {
+                            colliderVertex1 = triangulated[tr + 0];
+                            colliderVertex2 = triangulated[tr + 1];
+                            colliderVertex3 = triangulated[tr + 2];
 
                             // use the horizontal and vertical plane through the projector box.
                             // the distance of the vertices to the planes are used to calculate UV coordinates.
@@ -265,19 +273,18 @@ namespace AeternumGames.Chisel.Decals
             return results;
         }
 
-        private static Vector3[][] Triangulate(List<Vector3> polygon)
+        private static Vector3[] Triangulate(List<Vector3> polygon)
         {
             int triangleCount = polygon.Count - 2;
-            var triangles = new Vector3[triangleCount][];
+            var triangles = new Vector3[triangleCount * 3];
 
             // Calculate triangulation
+            int i = 0;
             for (int j = 0; j < triangleCount; j++)
             {
-                triangles[j] = new Vector3[] {
-                    polygon[0],
-                    polygon[j+1],
-                    polygon[j+2]
-                };
+                triangles[i++] = polygon[0];
+                triangles[i++] = polygon[j + 1];
+                triangles[i++] = polygon[j + 2];
             }
 
             return triangles;
@@ -315,7 +322,7 @@ namespace AeternumGames.Chisel.Decals
 
                 for (int j = 0; j < vertices.Count; j++)
                 {
-                    int jPlusOne = ClampListIndex(j + 1, vertices.Count);
+                    int jPlusOne = (j + 1) % vertices.Count;
 
                     Vector3 v1 = vertices[j];
                     Vector3 v2 = vertices[jPlusOne];
@@ -327,6 +334,7 @@ namespace AeternumGames.Chisel.Decals
                     float dist_to_v2 = plane.GetDistanceToPoint(v2);
 
                     //Case 1. Both are outside (= to the right), do nothing
+                    if (dist_to_v1 < 0f && dist_to_v2 < 0f) continue;
 
                     //Case 2. Both are inside (= to the left), save v2
                     if (dist_to_v1 > 0f && dist_to_v2 > 0f)
@@ -380,22 +388,12 @@ namespace AeternumGames.Chisel.Decals
             return intersectionPoint;
         }
 
-        private static int ClampListIndex(int index, int listSize)
-        {
-            index = ((index % listSize) + listSize) % listSize;
-
-            return index;
-        }
-
         // Get the normal to a triangle from the three corner points, a, b and c.
-        private Vector3 GetNormal(Vector3 a, Vector3 b, Vector3 c)
+        private static Vector3 GetNormal(Vector3 a, Vector3 b, Vector3 c)
         {
             // Find vectors corresponding to two of the sides of the triangle.
-            Vector3 side1 = b - a;
-            Vector3 side2 = c - a;
-
             // Cross the vectors to get a perpendicular vector, then normalize it.
-            return Vector3.Cross(side1, side2).normalized;
+            return Vector3.Cross(b - a, c - a).normalized;
         }
 
 #endif
