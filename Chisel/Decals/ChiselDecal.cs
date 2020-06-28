@@ -11,6 +11,7 @@ namespace AeternumGames.Chisel.Decals
 #if UNITY_EDITOR
 
         private MeshFilter meshFilter;
+        private int lastInstanceID;
 
         [SerializeField] private Vector3 lastWorldPosition;
         [SerializeField] private Quaternion lastWorldRotation;
@@ -65,8 +66,7 @@ namespace AeternumGames.Chisel.Decals
             // no logic during play.
             if (Application.isPlaying) return;
 
-            // always create a new mesh as duplication will copy our shared mesh.
-            // would have preferred mesh.Clear() but there's just no clean way to do it atm.
+            // create a new mesh or clear the existing one.
             Mesh mesh = ResetDecalMesh();
 
             // update the flags we need to tell if we have to rebuild the decal mesh.
@@ -250,9 +250,21 @@ namespace AeternumGames.Chisel.Decals
         /// </summary>
         private Mesh ResetDecalMesh()
         {
-            Mesh decalMesh = new Mesh();
-            decalMesh.name = "Chisel Decal";
-            meshFilter.sharedMesh = decalMesh;
+            Mesh decalMesh;
+
+            // duplication will copy our shared mesh - detect that using the instance id.
+            if (lastInstanceID == 0)
+            {
+                lastInstanceID = GetInstanceID();
+                decalMesh = new Mesh();
+                decalMesh.name = "Chisel Decal";
+                meshFilter.sharedMesh = decalMesh;
+                return decalMesh;
+            }
+
+            // clear the current mesh to prevent allocating a new one every rebuild.
+            decalMesh = meshFilter.sharedMesh;
+            decalMesh.Clear();
             return decalMesh;
         }
 
