@@ -19,6 +19,9 @@ namespace AeternumGames.Chisel.Decals
         [SerializeField] private Vector2 uvTiling = new Vector2(1.0f, 1.0f);
         [SerializeField] private Vector2 uvOffset = new Vector2(0.0f, 0.0f);
 
+        [Range(0.0f, 180.0f)]
+        [SerializeField] private float maxAngle = 89.0f;
+
         private void OnEnable()
         {
             // no logic during play.
@@ -78,6 +81,7 @@ namespace AeternumGames.Chisel.Decals
             List<Vector2> uvs = new List<Vector2>();
 
             // precalculate values that never change from this point on.
+
             Bounds projectorBounds = GetBounds();
             projectorBounds.center = transform.position - projectorBounds.center;
 
@@ -103,6 +107,8 @@ namespace AeternumGames.Chisel.Decals
             Plane hplane = new Plane(u, transform.position);
             Plane vplane = new Plane(r, transform.position);
 
+            float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
+
             foreach (var meshCollider in meshColliders)
             {
                 Mesh colliderMesh = meshCollider.sharedMesh;
@@ -122,6 +128,10 @@ namespace AeternumGames.Chisel.Decals
                     colliderVertex3 = meshCollider.transform.TransformPoint(colliderVertex3);
 
                     // now the mesh vertices are in world space 1:1 to how they appear in the scene.
+
+                    // if the triangle exceeds the maximum angle we discard it.
+                    if (Vector3.Dot(transform.forward.normalized, GetNormal(colliderVertex1, colliderVertex2, colliderVertex3)) >= maxAngleCos)
+                        continue;
 
                     // if the triangle bounds are completely outside of the projector bounds we discard it.
                     Bounds triangleBounds = new Bounds(colliderVertex1, Vector3.zero);
@@ -382,6 +392,17 @@ namespace AeternumGames.Chisel.Decals
             float distance = Vector3.Dot(planeNormal, pointPos - planePos);
 
             return distance;
+        }
+
+        // Get the normal to a triangle from the three corner points, a, b and c.
+        private Vector3 GetNormal(Vector3 a, Vector3 b, Vector3 c)
+        {
+            // Find vectors corresponding to two of the sides of the triangle.
+            Vector3 side1 = b - a;
+            Vector3 side2 = c - a;
+
+            // Cross the vectors to get a perpendicular vector, then normalize it.
+            return Vector3.Cross(side1, side2).normalized;
         }
 
 #endif

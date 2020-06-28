@@ -11,11 +11,13 @@ namespace AeternumGames.Chisel.Decals
     {
         private SerializedProperty uvTiling;
         private SerializedProperty uvOffset;
+        private SerializedProperty maxAngle;
 
         private void OnEnable()
         {
             uvTiling = serializedObject.FindProperty("uvTiling");
             uvOffset = serializedObject.FindProperty("uvOffset");
+            maxAngle = serializedObject.FindProperty("maxAngle");
         }
 
         public override void OnInspectorGUI()
@@ -24,6 +26,7 @@ namespace AeternumGames.Chisel.Decals
 
             EditorGUILayout.PropertyField(uvTiling);
             EditorGUILayout.PropertyField(uvOffset);
+            EditorGUILayout.PropertyField(maxAngle);
 
             // force rebuild the decal when modified.
             if (serializedObject.ApplyModifiedProperties())
