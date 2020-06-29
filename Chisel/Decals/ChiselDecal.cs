@@ -114,6 +114,9 @@ namespace AeternumGames.Chisel.Decals
 
             float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
 
+            // optimization: recycle the same polygon list used for clipping.
+            List<Vector3> poly = new List<Vector3>(8);
+
             for (int mc = 0; mc < meshCollidersCount; mc++)
             {
                 var meshCollider = meshColliders[mc];
@@ -156,9 +159,19 @@ namespace AeternumGames.Chisel.Decals
                 // find all triangles inside of the projector bounds using the octree.
                 List<BoundsOctreeTriangle> trianglesInsideProjector = new List<BoundsOctreeTriangle>();
                 meshTriangleOctrees[colliderMesh].GetColliding(trianglesInsideProjector, projectorBounds);
+                int trianglesInsideProjectorCount = trianglesInsideProjector.Count;
+
+                // optimization: ensure the decal mesh list capacities are large enough to contain all
+                // of the triangles. By themselves the lists would reallocate their array many times.
+                if (vertices.Capacity < trianglesInsideProjectorCount)
+                {
+                    vertices.Capacity = trianglesInsideProjectorCount;
+                    triangles.Capacity = trianglesInsideProjectorCount;
+                    uvs.Capacity = trianglesInsideProjectorCount;
+                }
 
                 // iterate over all triangles inside of the projector bounds:
-                for (int i = 0; i < trianglesInsideProjector.Count; i++)
+                for (int i = 0; i < trianglesInsideProjectorCount; i++)
                 {
                     // fetch a triangle from the octree.
                     BoundsOctreeTriangle triangle = trianglesInsideProjector[i];
@@ -175,7 +188,9 @@ namespace AeternumGames.Chisel.Decals
                     // optimization?: if the triangle is wholly inside of the projector we don't have to clip it.
 
                     // clip the triangle to fit inside of the projector box.
-                    List<Vector3> poly = ClipPolygon(new List<Vector3>() { colliderVertex1, colliderVertex2, colliderVertex3 }, clipPlanes);
+                    poly.Clear();
+                    poly.AddRange(new Vector3[] { colliderVertex1, colliderVertex2, colliderVertex3 });
+                    ClipTriangle(poly, clipPlanes);
 
                     if (poly.Count >= 3)
                     {
@@ -351,10 +366,11 @@ namespace AeternumGames.Chisel.Decals
         }
 
         // warning: input vertices will be modified!
-        private static List<Vector3> ClipPolygon(List<Vector3> vertices, Plane[] clippingPlanes)
+        private static void ClipTriangle(List<Vector3> vertices, Plane[] clippingPlanes)
         {
-            //Save the new vertices temporarily in this list before transfering them to vertices
-            List<Vector3> vertices_tmp = new List<Vector3>();
+            //Save the new vertices temporarily in this array before transfering them to vertices
+            Vector3[] vertices_tmp = new Vector3[8];
+            int vertices_tmp_count = 0;
 
             //Clip the polygon
             for (int i = 0; i < clippingPlanes.Length; i++)
@@ -381,7 +397,7 @@ namespace AeternumGames.Chisel.Decals
                     //Case 2. Both are inside (= to the left), save v2
                     if (dist_to_v1 > 0f && dist_to_v2 > 0f)
                     {
-                        vertices_tmp.Add(v2);
+                        vertices_tmp[vertices_tmp_count++] = v2;
                     }
                     //Case 3. Outside -> Inside, save intersection point and v2
                     else if (dist_to_v1 < 0f && dist_to_v2 > 0f)
@@ -390,9 +406,9 @@ namespace AeternumGames.Chisel.Decals
 
                         Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
 
-                        vertices_tmp.Add(intersectionPoint);
+                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
 
-                        vertices_tmp.Add(v2);
+                        vertices_tmp[vertices_tmp_count++] = v2;
                     }
                     //Case 4. Inside -> Outside, save intersection point
                     else if (dist_to_v1 > 0f && dist_to_v2 < 0f)
@@ -401,19 +417,18 @@ namespace AeternumGames.Chisel.Decals
 
                         Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
 
-                        vertices_tmp.Add(intersectionPoint);
+                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
                     }
                 }
 
                 //Add the new vertices to the list of vertices
                 vertices.Clear();
 
-                vertices.AddRange(vertices_tmp);
+                for (int k = 0; k < vertices_tmp_count; k++)
+                    vertices.Add(vertices_tmp[k]);
 
-                vertices_tmp.Clear();
+                vertices_tmp_count = 0; // vertices_tmp.Clear();
             }
-
-            return vertices;
         }
 
         //Get the coordinate if we know a ray-plane is intersecting
