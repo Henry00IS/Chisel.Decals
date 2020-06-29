@@ -122,7 +122,7 @@ namespace AeternumGames.Chisel.Decals
                 // make sure an octree of this mesh exists.
                 if (!meshTriangleOctrees.ContainsKey(colliderMesh))
                 {
-                    meshTriangleOctrees.Add(colliderMesh, new BoundsOctree<BoundsOctreeTriangle>(colliderMesh.bounds.max.magnitude, meshCollider.transform.position, 1.0f, 1.0f));
+                    meshTriangleOctrees.Add(colliderMesh, new BoundsOctree<BoundsOctreeTriangle>(8.0f, meshCollider.transform.position, 4.0f, 1.0f));
 
                     // get the collider vertices and triangles.
                     Vector3[] colliderVertices = colliderMesh.vertices;
