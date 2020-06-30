@@ -9,155 +9,102 @@ namespace AeternumGames.Chisel.Decals
 {
     internal class Clipping
     {
-        private enum PointToPlaneRelation
+        private Plane[] clippingPlanes;
+        private Vector3[] clippingPlanePositions;
+        private int clippingPlanesLength;
+
+        public Clipping(Plane[] planes)
         {
-            PointInFrontOfPlane,
-            PointBehindOfPlane,
-            PointOnPlane
+            clippingPlanes = planes;
+            clippingPlanesLength = clippingPlanes.Length;
+
+            // optimization: pre-calculate clip plane positions to prevent a dot product during clipping:
+            clippingPlanePositions = new Vector3[clippingPlanesLength];
+            for (int i = 0; i < clippingPlanesLength; i++)
+                clippingPlanePositions[i] = clippingPlanes[i].ClosestPointOnPlane(Vector3.zero);
         }
 
-        // Classify point p to a plane thickened by a given thickness epsilon
-        private static PointToPlaneRelation ClassifyPointToPlane(Vector3 p, Plane plane)
+        // warning: input vertices will be modified!
+        public int ClipTriangle(Vector3[] vertices)
         {
-            // Compute signed distance of point from plane
-            float dist = Vector3.Dot(plane.normal, p) - plane.distance;
-            // Classify p based on the signed distance
-            if (dist > 0.001f)
-                return PointToPlaneRelation.PointInFrontOfPlane;
-            if (dist < -0.001f)
-                return PointToPlaneRelation.PointBehindOfPlane;
-            return PointToPlaneRelation.PointOnPlane;
-        }
+            // we know there are always 3 vertices at first.
+            int vertices_count = 3;
 
-        private enum PolygonToPlaneRelation
-        {
-            PolygonOnPlane,
-            PolygonInFrontOfPlane,
-            PolygonBehindOfPlane,
-            PolygonCoplanarWithPlane
-        }
+            // save the new vertices temporarily in this array before transfering them to vertices.
+            Vector3[] vertices_tmp = new Vector3[8];
+            int vertices_tmp_count = 0;
 
-        // Return value specifying whether the polygon ‘poly’ lies in front of,
-        // behind of, on, or straddles the plane ‘plane’
-        private PolygonToPlaneRelation ClassifyPolygonToPlane(Vector3[] poly, Plane plane)
-        {
-            // Loop over all polygon vertices and count how many vertices
-            // lie in front of and how many lie behind of the thickened plane
-            int numInFront = 0, numBehind = 0;
-            int numVerts = poly.Length;
-            for (int i = 0; i < numVerts; i++)
+            //Clip the polygon
+            for (int i = 0; i < clippingPlanes.Length; i++)
             {
-                Vector3 p = poly[i];
-                switch (ClassifyPointToPlane(p, plane))
-                {
-                    case PointToPlaneRelation.PointInFrontOfPlane:
-                        numInFront++;
-                        break;
+                Plane plane = clippingPlanes[i];
+                Vector3 planePosition = clippingPlanePositions[i];
 
-                    case PointToPlaneRelation.PointBehindOfPlane:
-                        numBehind++;
-                        break;
-                }
-            }
-            // If vertices on both sides of the plane, the polygon is straddling
-            if (numBehind != 0 && numInFront != 0)
-                return PolygonToPlaneRelation.PolygonOnPlane;
-            // If one or more vertices in front of the plane and no vertices behind
-            // the plane, the polygon lies in front of the plane
-            if (numInFront != 0)
-                return PolygonToPlaneRelation.PolygonInFrontOfPlane;
-            // Ditto, the polygon lies behind the plane if no vertices in front of
-            // the plane, and one or more vertices behind the plane
-            if (numBehind != 0)
-                return PolygonToPlaneRelation.PolygonBehindOfPlane;
-            // All vertices lie on the plane so the polygon is coplanar with the plane
-            return PolygonToPlaneRelation.PolygonCoplanarWithPlane;
-        }
+                for (int j = 0; j < vertices_count; j++)
+                {
+                    int jPlusOne = (j + 1) % vertices_count;
 
-        /// <summary>
-        /// Gets the normalized interpolant between <paramref name="point1"/> and <paramref name="point2"/> where the edge they
-        /// represent intersects with the supplied <paramref name="plane"/>.
-        /// </summary>
-        /// <param name="plane">The plane that intersects with the edge.</param>
-        /// <param name="point1">The first point of the edge.</param>
-        /// <param name="point2">The last point of the edge.</param>
-        /// <returns>The normalized interpolant between the edge points where the plane intersects.</returns>
-        private static float GetPlaneIntersectionInterpolant(Plane plane, Vector3 point1, Vector3 point2)
-        {
-            Vector3 normal = plane.normal;
-            return (-normal.x * point1.x - normal.y * point1.y - normal.z * point1.z - plane.distance) / (-normal.x * (point1.x - point2.x) - normal.y * (point1.y - point2.y) - normal.z * (point1.z - point2.z));
-        }
+                    Vector3 v1 = vertices[j];
+                    Vector3 v2 = vertices[jPlusOne];
 
-        /// <summary>
-        /// Splits the polygon.
-        /// </summary>
-        /// <param name="poly">The poly.</param>
-        /// <param name="plane">The plane.</param>
-        /// <param name="frontPoly">The front poly.</param>
-        /// <param name="backPoly">The back poly.</param>
-        public static void SplitPolygon(Vector3[] poly, Plane plane, out Vector3[] frontPoly, out Vector3[] backPoly)
-        {
-            List<Vector3> frontVerts = new List<Vector3>(4);
-            List<Vector3> backVerts = new List<Vector3>(4);
-            // Test all edges (a, b) starting with edge from last to first vertex
-            int numVerts = poly.Length;
-            Vector3 a = poly[numVerts - 1];
-            PointToPlaneRelation aSide = ClassifyPointToPlane(a, plane);
-            // Loop over all edges given by vertex pair (n - 1, n)
-            for (int n = 0; n < numVerts; n++)
-            {
-                Vector3 b = poly[n];
-                PointToPlaneRelation bSide = ClassifyPointToPlane(b, plane);
-                if (bSide == PointToPlaneRelation.PointInFrontOfPlane)
-                {
-                    if (aSide == PointToPlaneRelation.PointBehindOfPlane)
+                    //Calculate the distance to the plane from each vertex
+                    //This is how we will know if they are inside or outside
+                    //If they are inside, the distance is positive, which is why the planes normals have to be oriented to the inside
+                    float dist_to_v1 = plane.GetDistanceToPoint(v1);
+                    float dist_to_v2 = plane.GetDistanceToPoint(v2);
+
+                    //Case 1. Both are outside (= to the right), do nothing
+                    if (dist_to_v1 < 0f && dist_to_v2 < 0f) continue;
+
+                    //Case 2. Both are inside (= to the left), save v2
+                    if (dist_to_v1 > 0f && dist_to_v2 > 0f)
                     {
-                        // Edge (a, b) straddles, output intersection point to both sides
-                        // Consistently clip edge as ordered going from in front -> behind
-                        //Vector3 i = new Vector3 { Position = FixVector3.Lerp(b.Position, a.Position, GetPlaneIntersectionInterpolant(plane, b.Position, a.Position)) };
-                        Vector3 i = Vector3.Lerp(b, a, GetPlaneIntersectionInterpolant(plane, b, a));
-                        //assert(ClassifyPointToPlane(i, plane) == PointToPlaneRelation.PointOnPlane);
-                        frontVerts.Add(i);
-                        backVerts.Add(i);
+                        vertices_tmp[vertices_tmp_count++] = v2;
                     }
-                    // In all three cases, output b to the front side
-                    frontVerts.Add(b);
-                }
-                else if (bSide == PointToPlaneRelation.PointBehindOfPlane)
-                {
-                    if (aSide == PointToPlaneRelation.PointInFrontOfPlane)
+                    //Case 3. Outside -> Inside, save intersection point and v2
+                    else if (dist_to_v1 < 0f && dist_to_v2 > 0f)
                     {
-                        // Edge (a, b) straddles plane, output intersection point
-                        Vector3 i = Vector3.Lerp(a, b, GetPlaneIntersectionInterpolant(plane, a, b));
-                        //Vector3 i = new Vector3 { Position = FixVector3.Lerp(a.Position, b.Position, GetPlaneIntersectionInterpolant(plane, a.Position, b.Position)) };
-                        //assert(ClassifyPointToPlane(i, plane) == POINT_ON_PLANE);
-                        frontVerts.Add(i);
-                        backVerts.Add(i);
+                        Vector3 rayDir = (v2 - v1).normalized;
+
+                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
+
+                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
+
+                        vertices_tmp[vertices_tmp_count++] = v2;
                     }
-                    else if (aSide == PointToPlaneRelation.PointOnPlane)
+                    //Case 4. Inside -> Outside, save intersection point
+                    else if (dist_to_v1 > 0f && dist_to_v2 < 0f)
                     {
-                        // Output a when edge (a, b) goes from ‘on’ to ‘behind’ plane
-                        backVerts.Add(a);
+                        Vector3 rayDir = (v2 - v1).normalized;
+
+                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
+
+                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
                     }
-                    // In all three cases, output b to the back side
-                    backVerts.Add(b);
                 }
-                else
-                {
-                    // b is on the plane. In all three cases output b to the front side
-                    frontVerts.Add(b);
-                    // In one case, also output b to back side
-                    if (aSide == PointToPlaneRelation.PointBehindOfPlane)
-                        backVerts.Add(b);
-                }
-                // Keep b as the starting point of the next edge
-                a = b;
-                aSide = bSide;
+
+                //Add the new vertices to the list of vertices
+                vertices_count = vertices_tmp_count;
+                vertices_tmp.CopyTo(vertices, 0);
+
+                vertices_tmp_count = 0;
             }
 
-            // Create (and return) two new polygons from the two vertex lists
-            frontPoly = frontVerts.ToArray();
-            backPoly = backVerts.ToArray();
+            return vertices_count;
+        }
+
+        //Get the coordinate if we know a ray-plane is intersecting
+        private static Vector3 GetRayPlaneIntersectionCoordinate(Vector3 planePos, Vector3 planeNormal, Vector3 rayStart, Vector3 rayDir)
+        {
+            float denominator = Vector3.Dot(-planeNormal, rayDir);
+
+            Vector3 vecBetween = planePos - rayStart;
+
+            float t = Vector3.Dot(vecBetween, -planeNormal) / denominator;
+
+            Vector3 intersectionPoint = rayStart + rayDir * t;
+
+            return intersectionPoint;
         }
     }
 }

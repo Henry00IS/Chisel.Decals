@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -98,14 +99,14 @@ namespace AeternumGames.Chisel.Decals
             float uoffset = 0.5f * uvTiling.x - uvOffset.x;
             float voffset = 0.5f * uvTiling.y + uvOffset.y;
 
-            Plane[] clipPlanes = new Plane[] {
+            Clipping clipping = new Clipping(new Plane[] {
                 new Plane(-r, transform.position + r),
                 new Plane(r, transform.position - r),
                 new Plane(-f, transform.position + f),
                 new Plane(f, transform.position - f),
                 new Plane(-u, transform.position + u + f),
                 new Plane(u, transform.position - u + f)
-            };
+            });
 
             // create a horizontal and vertical plane through the projector box.
             // the distance of the vertices to the planes are used to calculate UV coordinates.
@@ -115,7 +116,8 @@ namespace AeternumGames.Chisel.Decals
             float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
 
             // optimization: recycle the same polygon list used for clipping.
-            List<Vector3> poly = new List<Vector3>(8);
+            Vector3[] poly = new Vector3[8];
+            int polyCount = 0;
 
             for (int mc = 0; mc < meshCollidersCount; mc++)
             {
@@ -188,20 +190,29 @@ namespace AeternumGames.Chisel.Decals
                     // optimization?: if the triangle is wholly inside of the projector we don't have to clip it.
 
                     // clip the triangle to fit inside of the projector box.
-                    poly.Clear();
-                    poly.AddRange(new Vector3[] { colliderVertex1, colliderVertex2, colliderVertex3 });
-                    ClipTriangle(poly, clipPlanes);
+                    poly[0] = colliderVertex1;
+                    poly[1] = colliderVertex2;
+                    poly[2] = colliderVertex3;
+                    polyCount = clipping.ClipTriangle(poly);
 
-                    if (poly.Count >= 3)
+                    if (polyCount >= 3)
                     {
                         Vector3[] triangulated;
-                        // only triangulate if required:
-                        if (poly.Count > 3)
-                            triangulated = Triangulate(poly);
-                        else
-                            triangulated = new Vector3[] { poly[0], poly[1], poly[2] };
+                        int triangulatedCount;
 
-                        for (int tr = 0; tr < triangulated.Length; tr += 3)
+                        // only triangulate if required:
+                        if (polyCount > 3)
+                        {
+                            triangulated = Triangulate(poly, polyCount);
+                            triangulatedCount = triangulated.Length;
+                        }
+                        else
+                        {
+                            triangulated = poly;
+                            triangulatedCount = 3;
+                        }
+
+                        for (int tr = 0; tr < triangulatedCount; tr += 3)
                         {
                             colliderVertex1 = triangulated[tr + 0];
                             colliderVertex2 = triangulated[tr + 1];
@@ -330,9 +341,9 @@ namespace AeternumGames.Chisel.Decals
             return results;
         }
 
-        private static Vector3[] Triangulate(List<Vector3> polygon)
+        private static Vector3[] Triangulate(Vector3[] polygon, int polycount)
         {
-            int triangleCount = polygon.Count - 2;
+            int triangleCount = polycount - 2;
             var triangles = new Vector3[triangleCount * 3];
 
             // Calculate triangulation
@@ -363,86 +374,6 @@ namespace AeternumGames.Chisel.Decals
             projectorBounds.Encapsulate(-f + r - u);
             projectorBounds.Encapsulate(-f - r - u);
             return projectorBounds;
-        }
-
-        // warning: input vertices will be modified!
-        private static void ClipTriangle(List<Vector3> vertices, Plane[] clippingPlanes)
-        {
-            //Save the new vertices temporarily in this array before transfering them to vertices
-            Vector3[] vertices_tmp = new Vector3[8];
-            int vertices_tmp_count = 0;
-
-            //Clip the polygon
-            for (int i = 0; i < clippingPlanes.Length; i++)
-            {
-                Plane plane = clippingPlanes[i];
-                Vector3 planePosition = plane.ClosestPointOnPlane(Vector3.zero);
-
-                for (int j = 0; j < vertices.Count; j++)
-                {
-                    int jPlusOne = (j + 1) % vertices.Count;
-
-                    Vector3 v1 = vertices[j];
-                    Vector3 v2 = vertices[jPlusOne];
-
-                    //Calculate the distance to the plane from each vertex
-                    //This is how we will know if they are inside or outside
-                    //If they are inside, the distance is positive, which is why the planes normals have to be oriented to the inside
-                    float dist_to_v1 = plane.GetDistanceToPoint(v1);
-                    float dist_to_v2 = plane.GetDistanceToPoint(v2);
-
-                    //Case 1. Both are outside (= to the right), do nothing
-                    if (dist_to_v1 < 0f && dist_to_v2 < 0f) continue;
-
-                    //Case 2. Both are inside (= to the left), save v2
-                    if (dist_to_v1 > 0f && dist_to_v2 > 0f)
-                    {
-                        vertices_tmp[vertices_tmp_count++] = v2;
-                    }
-                    //Case 3. Outside -> Inside, save intersection point and v2
-                    else if (dist_to_v1 < 0f && dist_to_v2 > 0f)
-                    {
-                        Vector3 rayDir = (v2 - v1).normalized;
-
-                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
-
-                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
-
-                        vertices_tmp[vertices_tmp_count++] = v2;
-                    }
-                    //Case 4. Inside -> Outside, save intersection point
-                    else if (dist_to_v1 > 0f && dist_to_v2 < 0f)
-                    {
-                        Vector3 rayDir = (v2 - v1).normalized;
-
-                        Vector3 intersectionPoint = GetRayPlaneIntersectionCoordinate(planePosition, plane.normal, v1, rayDir);
-
-                        vertices_tmp[vertices_tmp_count++] = intersectionPoint;
-                    }
-                }
-
-                //Add the new vertices to the list of vertices
-                vertices.Clear();
-
-                for (int k = 0; k < vertices_tmp_count; k++)
-                    vertices.Add(vertices_tmp[k]);
-
-                vertices_tmp_count = 0; // vertices_tmp.Clear();
-            }
-        }
-
-        //Get the coordinate if we know a ray-plane is intersecting
-        private static Vector3 GetRayPlaneIntersectionCoordinate(Vector3 planePos, Vector3 planeNormal, Vector3 rayStart, Vector3 rayDir)
-        {
-            float denominator = Vector3.Dot(-planeNormal, rayDir);
-
-            Vector3 vecBetween = planePos - rayStart;
-
-            float t = Vector3.Dot(vecBetween, -planeNormal) / denominator;
-
-            Vector3 intersectionPoint = rayStart + rayDir * t;
-
-            return intersectionPoint;
         }
 
         // Get the normal to a triangle from the three corner points, a, b and c.
