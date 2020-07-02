@@ -2,11 +2,13 @@
 
 namespace AeternumGames.Chisel.Decals
 {
+    // clipping algorithm for exactly 8 planes and a single triangle.
     internal class Clipping
     {
         private Plane[] clippingPlanes;
         private Vector3[] clippingPlanePositions;
         private int clippingPlanesLength;
+        private Vector3[] vertices_tmp = new Vector3[8];
 
         public Clipping(Plane[] planes)
         {
@@ -26,7 +28,6 @@ namespace AeternumGames.Chisel.Decals
             int vertices_count = 3;
 
             // save the new vertices temporarily in this array before transfering them to vertices.
-            Vector3[] vertices_tmp = new Vector3[8];
             int vertices_tmp_count = 0;
 
             //Clip the polygon

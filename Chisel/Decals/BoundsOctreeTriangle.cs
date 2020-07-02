@@ -6,9 +6,10 @@ namespace AeternumGames.Chisel.Decals
 {
     public struct BoundsOctreeTriangle
     {
-        public Vector3 triangleVertex1;
-        public Vector3 triangleVertex2;
-        public Vector3 triangleVertex3;
+        public Vector3 vertex1;
+        public Vector3 vertex2;
+        public Vector3 vertex3;
+        public Vector3 normal;
     }
 }
 

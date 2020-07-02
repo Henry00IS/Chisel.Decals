@@ -153,7 +153,7 @@ namespace AeternumGames.Chisel.Decals
                         triangleBounds.Encapsulate(colliderVertex3);
 
                         // add the triangle to the octree.
-                        meshTriangleOctrees[colliderMesh].Add(new BoundsOctreeTriangle() { triangleVertex1 = colliderVertex1, triangleVertex2 = colliderVertex2, triangleVertex3 = colliderVertex3 }, triangleBounds);
+                        meshTriangleOctrees[colliderMesh].Add(new BoundsOctreeTriangle() { vertex1 = colliderVertex1, vertex2 = colliderVertex2, vertex3 = colliderVertex3, normal = GetNormal(colliderVertex1, colliderVertex2, colliderVertex3) }, triangleBounds);
                     }
                 }
 
@@ -176,22 +176,19 @@ namespace AeternumGames.Chisel.Decals
                 {
                     // fetch a triangle from the octree.
                     BoundsOctreeTriangle triangle = trianglesInsideProjector[i];
-                    Vector3 colliderVertex1 = triangle.triangleVertex1;
-                    Vector3 colliderVertex2 = triangle.triangleVertex2;
-                    Vector3 colliderVertex3 = triangle.triangleVertex3;
 
                     // the mesh vertices are in world space 1:1 to how they appear in the scene.
 
                     // if the triangle exceeds the maximum angle we discard it.
-                    if (Vector3.Dot(transform.forward, GetNormal(colliderVertex1, colliderVertex2, colliderVertex3)) >= maxAngleCos)
+                    if (Vector3.Dot(transform.forward, triangle.normal) >= maxAngleCos)
                         continue;
 
                     // optimization?: if the triangle is wholly inside of the projector we don't have to clip it.
 
                     // clip the triangle to fit inside of the projector box.
-                    poly[0] = colliderVertex1;
-                    poly[1] = colliderVertex2;
-                    poly[2] = colliderVertex3;
+                    poly[0] = triangle.vertex1;
+                    poly[1] = triangle.vertex2;
+                    poly[2] = triangle.vertex3;
                     polyCount = clipping.ClipTriangle(poly);
 
                     if (polyCount >= 3)
@@ -213,9 +210,9 @@ namespace AeternumGames.Chisel.Decals
 
                         for (int tr = 0; tr < triangulatedCount; tr += 3)
                         {
-                            colliderVertex1 = triangulated[tr + 0];
-                            colliderVertex2 = triangulated[tr + 1];
-                            colliderVertex3 = triangulated[tr + 2];
+                            Vector3 colliderVertex1 = triangulated[tr + 0];
+                            Vector3 colliderVertex2 = triangulated[tr + 1];
+                            Vector3 colliderVertex3 = triangulated[tr + 2];
 
                             // use the horizontal and vertical plane through the projector box.
                             // the distance of the vertices to the planes are used to calculate UV coordinates.
@@ -223,22 +220,18 @@ namespace AeternumGames.Chisel.Decals
                             Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + voffset);
                             Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + voffset);
 
-                            // undo our transformation so that the mesh looks correct in the scene.
-                            colliderVertex1 = transform.InverseTransformPoint(colliderVertex1);
-                            colliderVertex2 = transform.InverseTransformPoint(colliderVertex2);
-                            colliderVertex3 = transform.InverseTransformPoint(colliderVertex3);
-
-                            // ADD
                             // todo: calculate a z-offset using the sibling index letting you order decals in the hierarchy.
-                            Vector3 normal = GetNormal(colliderVertex1, colliderVertex2, colliderVertex3);
-                            colliderVertex1 += normal * 0.001f;
-                            colliderVertex2 += normal * 0.001f;
-                            colliderVertex3 += normal * 0.001f;
+                            Vector3 normal = triangle.normal * 0.001f;
 
+                            // undo our transformation so that the mesh looks correct in the scene.
+                            colliderVertex1 = transform.InverseTransformPoint(colliderVertex1 + normal);
+                            colliderVertex2 = transform.InverseTransformPoint(colliderVertex2 + normal);
+                            colliderVertex3 = transform.InverseTransformPoint(colliderVertex3 + normal);
+
+                            // add vertices to the decal mesh.
                             vertices.Add(colliderVertex1); triangles.Add(vertices.Count - 1); uvs.Add(uv1);
                             vertices.Add(colliderVertex2); triangles.Add(vertices.Count - 1); uvs.Add(uv2);
                             vertices.Add(colliderVertex3); triangles.Add(vertices.Count - 1); uvs.Add(uv3);
-                            // ADD
                         }
                     }
                 }
