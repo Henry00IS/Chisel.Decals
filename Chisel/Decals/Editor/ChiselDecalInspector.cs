@@ -50,6 +50,11 @@ namespace AeternumGames.Chisel.Decals
 
             EditorGUILayout.EndHorizontal();
 
+            // camera placement tools:
+
+            if (GUILayout.Button("Smart Place By Camera"))
+                SmartPlaceByCamera();
+
             // force rebuild the decal when modified.
             if (serializedObject.ApplyModifiedProperties())
             {
@@ -92,6 +97,32 @@ namespace AeternumGames.Chisel.Decals
                 Vector3 f = decal.transform.TransformVector(Vector3.forward * 0.5f);
                 if (Physics.Raycast(new Ray(decal.transform.position - f, f), out RaycastHit hit, f.magnitude * 2.0f))
                     decal.transform.rotation = Quaternion.LookRotation(-hit.normal);
+            }
+        }
+
+        private void SmartPlaceByCamera()
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                Undo.RecordObject(decal.transform, "Move Decal To Camera");
+
+                // rotate to match the camera:
+                Camera camera = SceneView.lastActiveSceneView?.camera;
+                if (camera != null)
+                {
+                    // attempt to find collision in front of the camera.
+                    if (Physics.Raycast(new Ray(camera.transform.position, camera.transform.forward), out RaycastHit hit, 50.0f))
+                    {
+                        decal.transform.position = hit.point;
+                        decal.transform.rotation = Quaternion.LookRotation(-hit.normal);
+                    }
+                    else
+                    {
+                        decal.transform.position = camera.transform.position + (camera.transform.forward.normalized * 3.0f);
+                        decal.transform.rotation = Quaternion.LookRotation(NearestWorldAxis(camera.transform.forward));
+                    }
+                }
             }
         }
 

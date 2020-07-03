@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace AeternumGames.Chisel.Decals
 {
@@ -36,7 +37,7 @@ namespace AeternumGames.Chisel.Decals
 
             // initialize the mesh renderer.
             var meshRenderer = GetComponent<MeshRenderer>();
-            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
 
             // ensure a material is assigned to the mesh renderer.
             if (meshRenderer.sharedMaterial == null)
@@ -85,6 +86,8 @@ namespace AeternumGames.Chisel.Decals
             List<Vector2> uvs = new List<Vector2>(6 * meshCollidersCount);
 
             // precalculate values that never change from this point on.
+
+            MeshUpdateFlags meshUpdateFlags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers | MeshUpdateFlags.DontResetBoneBounds;
 
             Bounds projectorBounds = GetBounds();
             projectorBounds.center = transform.position - projectorBounds.center;
@@ -242,8 +245,8 @@ namespace AeternumGames.Chisel.Decals
                 mesh.SetVertices(vertices);
                 mesh.SetTriangles(triangles, 0);
                 mesh.SetUVs(0, uvs);
-                mesh.RecalculateNormals();
-                mesh.RecalculateTangents();
+                mesh.RecalculateNormals(meshUpdateFlags);
+                mesh.RecalculateTangents(meshUpdateFlags);
             }
         }
 
