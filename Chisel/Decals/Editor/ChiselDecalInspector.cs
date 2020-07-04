@@ -2,6 +2,8 @@
 
 using UnityEngine;
 using UnityEditor;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace AeternumGames.Chisel.Decals
 {
@@ -81,8 +83,15 @@ namespace AeternumGames.Chisel.Decals
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.Separator();
 
+            EditorGUILayout.BeginHorizontal();
+
             if (GUILayout.Button("Order By Sibling Index"))
                 ZOffsetOrderBySiblings();
+
+            if (GUILayout.Button("Smart Order"))
+                SmartOrder(serializedObject.targetObjects.Cast<ChiselDecal>().ToArray());
+
+            EditorGUILayout.EndHorizontal();
 
             // force rebuild the decal when modified.
             if (serializedObject.ApplyModifiedProperties())
@@ -95,6 +104,21 @@ namespace AeternumGames.Chisel.Decals
             {
                 RebuildTargetDecals();
             }
+
+            // global tools.
+
+            EditorGUILayout.Separator();
+            EditorGUILayout.LabelField("⚠ Global Decal Tools", EditorStyles.boldLabel);
+            EditorGUILayout.Separator();
+            EditorGUILayout.BeginHorizontal();
+
+            if (GUILayout.Button("Rebuild All"))
+                RebuildGlobalDecals();
+
+            if (GUILayout.Button("Smart Order"))
+                SmartOrder(FindObjectsOfType<ChiselDecal>());
+
+            EditorGUILayout.EndHorizontal();
         }
 
         private void RebuildTargetDecals()
@@ -219,6 +243,63 @@ namespace AeternumGames.Chisel.Decals
                 if (so.ApplyModifiedPropertiesWithoutUndo())
                 {
                     RebuildTargetDecals();
+                }
+            }
+        }
+
+        private void RebuildGlobalDecals()
+        {
+            foreach (var decal in FindObjectsOfType<ChiselDecal>())
+            {
+                decal.Rebuild();
+            }
+        }
+
+        // this algorithm can be improved, it's not working right - feel free to contribute a fix! ~ Henry
+        // the idea is that we combine decals to small groups touching each-other (by bounds),
+        // then order them by the order they appear in the hierarchy.
+        // it should keep numbers small 0 to X so they are snug against the wall.
+        private void SmartOrder(ChiselDecal[] decals)
+        {
+            // build an octree to contain the rendering bounds of every decal.
+            BoundsOctree<ChiselDecal> octree = new BoundsOctree<ChiselDecal>(8.0f, Vector3.zero, 1.0f, 1.0f);
+
+            // find the rendering bounds of every decal and add them to the octree.
+            for (int i = 0; i < decals.Length; i++)
+            {
+                ChiselDecal decal = decals[i];
+                octree.Add(decal, decal.GetComponent<MeshRenderer>().bounds);
+            }
+
+            // iterate over every decal:
+            for (int i = 0; i < decals.Length; i++)
+            {
+                ChiselDecal decal = decals[i];
+
+                // find all of the decals that are intersecting this decal using the octree.
+                List<ChiselDecal> others = new List<ChiselDecal>();
+                octree.GetColliding(others, decal.GetComponent<MeshRenderer>().bounds);
+
+                // order all of them (including us) by their sibling index.
+                ChiselDecal[] ordered = others.OrderBy(o => o.transform.GetSiblingIndex()).ToArray();
+
+                // find our position in the ordered set.
+                int zoffset = 0;
+                for (int j = 0; j < ordered.Length; j++)
+                    if (ordered[j] == decal)
+                        zoffset = j;
+
+                // use this as our z-offset.
+                var so = new SerializedObject(decal);
+                var zo = so.FindProperty("zOffset");
+                Undo.RecordObject(decal, "Global Smart Order Decals");
+
+                zo.intValue = zoffset;
+
+                // force rebuild the decal when modified.
+                if (so.ApplyModifiedPropertiesWithoutUndo())
+                {
+                    decal.Rebuild();
                 }
             }
         }
