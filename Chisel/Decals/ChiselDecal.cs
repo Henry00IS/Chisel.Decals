@@ -11,7 +11,7 @@ namespace AeternumGames.Chisel.Decals
     {
 #if UNITY_EDITOR
 
-        /// <summary>Shared dictionary of octrees of triangle indices for every mesh we are computing with.</summary>
+        /// <summary>Shared dictionary of octrees of world-space triangles for every collider mesh we are computing with.</summary>
         internal static readonly Dictionary<Mesh, BoundsOctree<BoundsOctreeTriangle>> meshTriangleOctrees = new Dictionary<Mesh, BoundsOctree<BoundsOctreeTriangle>>();
 
         private MeshFilter meshFilter;
@@ -26,6 +26,9 @@ namespace AeternumGames.Chisel.Decals
 
         [Range(0.0f, 180.0f)]
         [SerializeField] private float maxAngle = 89.0f;
+
+        [Min(0.0f)]
+        [SerializeField] private int zOffset = 0;
 
         private void OnEnable()
         {
@@ -116,6 +119,7 @@ namespace AeternumGames.Chisel.Decals
             Plane vplane = new Plane(r, transform.position);
 
             float maxAngleCos = Mathf.Cos(Mathf.Deg2Rad * (180.0f - maxAngle));
+            float zOffsetMultiplier = 0.001f + (zOffset * 0.001f);
 
             // optimization: recycle the same polygon list used for clipping.
             Vector3[] poly = new Vector3[8];
@@ -223,8 +227,8 @@ namespace AeternumGames.Chisel.Decals
                             Vector2 uv2 = new Vector2((vplane.GetDistanceToPoint(colliderVertex2) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex2) * vscale) + voffset);
                             Vector2 uv3 = new Vector2((vplane.GetDistanceToPoint(colliderVertex3) * uscale) + uoffset, (hplane.GetDistanceToPoint(colliderVertex3) * vscale) + voffset);
 
-                            // todo: calculate a z-offset using the sibling index letting you order decals in the hierarchy.
-                            Vector3 normal = triangle.normal * 0.001f;
+                            // calculate the z-offset.
+                            Vector3 normal = triangle.normal * zOffsetMultiplier;
 
                             // undo our transformation so that the mesh looks correct in the scene.
                             colliderVertex1 = transform.InverseTransformPoint(colliderVertex1 + normal);
@@ -274,6 +278,9 @@ namespace AeternumGames.Chisel.Decals
 
         private void OnDrawGizmos()
         {
+            if (Vector3.Distance(Camera.current.transform.position, transform.position) > 55f)
+                return;
+
             Vector3 r = transform.TransformVector(Vector3.right * 0.5f);
             Vector3 f = transform.TransformVector(Vector3.forward * 0.5f);
             Vector3 u = transform.TransformVector(Vector3.up * 0.5f);

@@ -1,8 +1,11 @@
-﻿using UnityEngine;
+﻿#if UNITY_EDITOR
+
+using UnityEngine;
 
 namespace AeternumGames.Chisel.Decals
 {
     // clipping algorithm for exactly 8 planes and a single triangle.
+    // special thanks to Erik Nordeus https://www.habrador.com/tutorials/math/12-cut-polygons/ for his Sutherland-Hodgman algorithm.
     internal class Clipping
     {
         private Plane[] clippingPlanes;
@@ -104,3 +107,5 @@ namespace AeternumGames.Chisel.Decals
         }
     }
 }
+
+#endif

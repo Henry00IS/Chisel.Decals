@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 
 using UnityEngine;
 using UnityEditor;
@@ -12,30 +12,43 @@ namespace AeternumGames.Chisel.Decals
         private SerializedProperty uvTiling;
         private SerializedProperty uvOffset;
         private SerializedProperty maxAngle;
+        private SerializedProperty zOffset;
 
         private void OnEnable()
         {
             uvTiling = serializedObject.FindProperty("uvTiling");
             uvOffset = serializedObject.FindProperty("uvOffset");
             maxAngle = serializedObject.FindProperty("maxAngle");
+            zOffset = serializedObject.FindProperty("zOffset");
         }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
 
+            var prevWideMode = EditorGUIUtility.wideMode;
+            EditorGUIUtility.wideMode = true;
             EditorGUILayout.PropertyField(uvTiling);
             EditorGUILayout.PropertyField(uvOffset);
+            EditorGUIUtility.wideMode = prevWideMode;
+
             EditorGUILayout.PropertyField(maxAngle);
 
             // horizontal and vertical flip tools:
+            EditorGUILayout.Separator();
             EditorGUILayout.BeginHorizontal();
 
-            if (GUILayout.Button("Flip Horizontally"))
+            if (GUILayout.Button("Flip X"))
                 uvTiling.vector2Value *= new Vector2(-1.0f, 1.0f);
 
-            if (GUILayout.Button("Flip Vertically"))
+            if (GUILayout.Button("Flip Y"))
                 uvTiling.vector2Value *= new Vector2(1.0f, -1.0f);
+
+            if (GUILayout.Button("↺ -90"))
+                RotateDecals(-90.0f);
+
+            if (GUILayout.Button("↻ +90"))
+                RotateDecals(90.0f);
 
             EditorGUILayout.EndHorizontal();
 
@@ -48,12 +61,28 @@ namespace AeternumGames.Chisel.Decals
             if (GUILayout.Button("Face Align"))
                 FaceAlignDecals();
 
-            EditorGUILayout.EndHorizontal();
-
-            // camera placement tools:
-
-            if (GUILayout.Button("Smart Place By Camera"))
+            if (GUILayout.Button("Smart Place"))
                 SmartPlaceByCamera();
+
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Separator();
+
+            // z-offset tools:
+            EditorGUILayout.BeginHorizontal();
+
+            EditorGUILayout.PropertyField(zOffset);
+
+            if (GUILayout.Button("-"))
+                ZOffsetOrderDecrease();
+
+            if (GUILayout.Button("+"))
+                ZOffsetOrderIncrease();
+
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Separator();
+
+            if (GUILayout.Button("Order By Sibling Index"))
+                ZOffsetOrderBySiblings();
 
             // force rebuild the decal when modified.
             if (serializedObject.ApplyModifiedProperties())
@@ -122,6 +151,74 @@ namespace AeternumGames.Chisel.Decals
                         decal.transform.position = camera.transform.position + (camera.transform.forward.normalized * 3.0f);
                         decal.transform.rotation = Quaternion.LookRotation(NearestWorldAxis(camera.transform.forward));
                     }
+                }
+            }
+        }
+
+        private void RotateDecals(float degrees)
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                Undo.RecordObject(decal.transform, "Rotate Decals");
+
+                decal.transform.Rotate(Vector3.forward, -degrees);
+            }
+        }
+
+        private void ZOffsetOrderIncrease()
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                var so = new SerializedObject(target);
+                var zo = so.FindProperty("zOffset");
+                Undo.RecordObject(decal, "Increase Z-Offset of Decals");
+
+                zo.intValue += 1;
+
+                // force rebuild the decal when modified.
+                if (so.ApplyModifiedPropertiesWithoutUndo())
+                {
+                    RebuildTargetDecals();
+                }
+            }
+        }
+
+        private void ZOffsetOrderDecrease()
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                var so = new SerializedObject(target);
+                var zo = so.FindProperty("zOffset");
+                Undo.RecordObject(decal, "Decrease Z-Offset of Decals");
+
+                zo.intValue = Mathf.Max(0, zo.intValue - 1);
+
+                // force rebuild the decal when modified.
+                if (so.ApplyModifiedPropertiesWithoutUndo())
+                {
+                    RebuildTargetDecals();
+                }
+            }
+        }
+
+        private void ZOffsetOrderBySiblings()
+        {
+            foreach (var target in serializedObject.targetObjects)
+            {
+                var decal = (ChiselDecal)target;
+                var so = new SerializedObject(target);
+                var zo = so.FindProperty("zOffset");
+                Undo.RecordObject(decal, "Order Decals By Siblings");
+
+                zo.intValue = decal.transform.GetSiblingIndex();
+
+                // force rebuild the decal when modified.
+                if (so.ApplyModifiedPropertiesWithoutUndo())
+                {
+                    RebuildTargetDecals();
                 }
             }
         }
