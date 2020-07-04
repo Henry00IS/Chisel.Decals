@@ -93,15 +93,16 @@ namespace AeternumGames.Chisel.Decals
 
             EditorGUILayout.EndHorizontal();
 
-            // force rebuild the decal when modified.
-            if (serializedObject.ApplyModifiedProperties())
+            // force rebuild the decal when modified - always on undo or redo.
+            if (serializedObject.ApplyModifiedProperties() || (Event.current.commandName == "UndoRedoPerformed"))
             {
                 RebuildTargetDecals();
             }
 
-            // force rebuild the decal manually - always on undo or redo.
-            if (GUILayout.Button("Force Rebuild") || (Event.current.commandName == "UndoRedoPerformed"))
+            // force rebuild the decal manually.
+            if (GUILayout.Button("Force Rebuild"))
             {
+                ChiselDecal.meshTriangleOctrees.Clear();
                 RebuildTargetDecals();
             }
 
@@ -113,7 +114,10 @@ namespace AeternumGames.Chisel.Decals
             EditorGUILayout.BeginHorizontal();
 
             if (GUILayout.Button("Rebuild All"))
+            {
+                ChiselDecal.meshTriangleOctrees.Clear();
                 RebuildGlobalDecals();
+            }
 
             if (GUILayout.Button("Smart Order"))
                 SmartOrder(FindObjectsOfType<ChiselDecal>());
