@@ -130,6 +130,9 @@ namespace AeternumGames.Chisel.Decals
                 var meshCollider = meshColliders[mc];
                 Mesh colliderMesh = meshCollider.sharedMesh;
 
+                // skip meshes whose polygons can not be read.
+                if (!colliderMesh.isReadable) continue;
+
                 // make sure an octree of this mesh exists.
                 if (!meshTriangleOctrees.ContainsKey(colliderMesh))
                 {
@@ -332,7 +335,7 @@ namespace AeternumGames.Chisel.Decals
         /// <param name="results">The list that will contain all of the results.</param>
         private List<MeshCollider> FindMeshColliders()
         {
-            Collider[] colliders = Physics.OverlapBox(transform.position, transform.lossyScale * 0.5f, Quaternion.LookRotation(transform.forward));
+            Collider[] colliders = Physics.OverlapBox(transform.position, transform.lossyScale * 0.5f, Quaternion.LookRotation(transform.forward), -1, QueryTriggerInteraction.Ignore);
             var results = new List<MeshCollider>(colliders.Length);
             for (int i = 0; i < colliders.Length; i++)
             {

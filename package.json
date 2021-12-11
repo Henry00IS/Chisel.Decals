@@ -15,8 +15,6 @@
   "unity": "2018.3",
   "version": "1.0.8",
   "dependencies": {
-    "com.unity.mathematics": "1.1.0",
-    "com.chisel.core": "",
-    "com.chisel.components": ""
+    "com.unity.mathematics": "1.1.0"
   }
 }
