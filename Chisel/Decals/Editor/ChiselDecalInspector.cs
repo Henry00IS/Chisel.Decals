@@ -152,7 +152,7 @@ namespace AeternumGames.Chisel.Decals
                 Undo.RecordObject(decal.transform, "Face Align Decal");
 
                 Vector3 f = decal.transform.TransformVector(Vector3.forward * 0.5f);
-                if (Physics.Raycast(new Ray(decal.transform.position - f, f), out RaycastHit hit, f.magnitude * 2.0f))
+                if (Physics.Raycast(new Ray(decal.transform.position - f, f), out RaycastHit hit, f.magnitude * 2.0f, -1, QueryTriggerInteraction.Ignore))
                     decal.transform.rotation = Quaternion.LookRotation(-hit.normal);
             }
         }
@@ -169,7 +169,7 @@ namespace AeternumGames.Chisel.Decals
                 if (camera != null)
                 {
                     // attempt to find collision in front of the camera.
-                    if (Physics.Raycast(new Ray(camera.transform.position, camera.transform.forward), out RaycastHit hit, 50.0f))
+                    if (Physics.Raycast(new Ray(camera.transform.position, camera.transform.forward), out RaycastHit hit, 50.0f, -1, QueryTriggerInteraction.Ignore))
                     {
                         decal.transform.position = hit.point;
                         decal.transform.rotation = Quaternion.LookRotation(-hit.normal);
