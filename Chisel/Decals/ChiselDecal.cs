@@ -311,10 +311,10 @@ namespace AeternumGames.Chisel.Decals
         /// </summary>
         private Mesh ResetDecalMesh()
         {
-            Mesh decalMesh;
+            Mesh decalMesh = meshFilter.sharedMesh;
 
             // duplication will copy our shared mesh - detect that using the instance id.
-            if (lastInstanceID == 0)
+            if (lastInstanceID == 0 || decalMesh == null)
             {
                 lastInstanceID = GetInstanceID();
                 decalMesh = new Mesh();
@@ -324,7 +324,6 @@ namespace AeternumGames.Chisel.Decals
             }
 
             // clear the current mesh to prevent allocating a new one every rebuild.
-            decalMesh = meshFilter.sharedMesh;
             decalMesh.Clear();
             return decalMesh;
         }
